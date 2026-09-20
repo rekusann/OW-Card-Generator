@@ -181,7 +181,6 @@
 /* mini-interview */
 .sec-mini-interview {
     z-index: 2;
-    width: 70%;
 }
 
 .mini-interview {
@@ -208,7 +207,7 @@
     padding: 6px 16px;
     background: var(--item-bg);
     color: var(--main-text-2);
-    width: max-content;
+    width: 70%;
     margin-top: 4px;
     box-shadow: 4px 4px var(--item-shadow);
 }
