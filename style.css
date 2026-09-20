@@ -188,8 +188,7 @@
     font-size: 20px;
     font-weight: 700;
     letter-spacing: -0.05rem;
-    width: fit-content;
-    max-width: 70%;
+    width: 100%;
     margin-left: 16px;
     margin-top: 16px;
 }
@@ -201,9 +200,11 @@
 
 .q-text{
     margin-top: 20px;
+    width: 70%;
 }
 
 .a-text{
+    width: 70%;
     margin-left: 12px;
     padding: 6px 16px;
     background: var(--item-bg);
