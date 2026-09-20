@@ -200,11 +200,13 @@
 
 .q-text{
     margin-top: 20px;
-    max-width: 70%;
+    width: fit-content;
+    max-width: 70%; 
 }
 
 .a-text{
-    max-width: 70%;
+    width: fit-content;
+    max-width: 70%; 
     margin-left: 12px;
     padding: 6px 16px;
     background: var(--item-bg);
