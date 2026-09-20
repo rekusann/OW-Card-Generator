@@ -200,11 +200,11 @@
 
 .q-text{
     margin-top: 20px;
-    width: 70%;
+    max-width: 70%;
 }
 
 .a-text{
-    width: 70%;
+    max-width: 70%;
     margin-left: 12px;
     padding: 6px 16px;
     background: var(--item-bg);
