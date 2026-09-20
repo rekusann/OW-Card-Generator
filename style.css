@@ -188,7 +188,8 @@
     font-size: 20px;
     font-weight: 700;
     letter-spacing: -0.05rem;
-    width: 70%;
+    width: fit-content;
+    max-width: 70%;
     margin-left: 16px;
     margin-top: 16px;
 }
