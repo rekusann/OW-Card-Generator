@@ -181,6 +181,7 @@
 /* mini-interview */
 .sec-mini-interview {
     z-index: 2;
+    width: 70%;
 }
 
 .mini-interview {
