@@ -204,56 +204,67 @@
      ヒーロー一覧の読み込み（./text/heroes.txt）
   ========================================================= */
   let heroList = [];
- 
-  function buildBgHeroAccordion() {
-    const options = [{ value: '', label: 'なし' }, ...heroList.map(h => ({ value: h, label: h }))];
-    const acc = createAccordion({
-      options,
-      defaultValues: [''],
-      placeholder: '背景キャラを選択',
-      name: 'bg-hero',
-      onChange: (v) => {
-        cardContainer.style.backgroundImage = v ? `url(./img/${v}.png)` : '';
-      }
-    });
-    const mount = document.getElementById('acc-bg-hero');
-    mount.replaceWith(acc);
-    acc.id = 'acc-bg-hero';
-  }
- 
-  function buildHeroPoolAccordion() {
-    const options = heroList.map(h => ({ value: h, label: h }));
-    const acc = createAccordion({
-      options,
-      multi: true,
-      max: 3,
-      defaultValues: [],
-      placeholder: 'ヒーローを選択',
-      onChange: (values) => {
-        document.getElementById('hero-pool-cont').textContent = values.join(' / ');
-      }
-    });
-    const mount = document.getElementById('acc-hero-pool');
-    mount.replaceWith(acc);
-    acc.id = 'acc-hero-pool';
-  }
- 
-  fetch('./text/heroes.txt')
+let heroDisplayList = [];
+
+function buildBgHeroAccordion() {
+  const options = [{ value: '', label: 'なし' }, ...heroList.map(h => ({ value: h, label: h }))];
+  const acc = createAccordion({
+    options,
+    defaultValues: [''],
+    placeholder: '背景キャラを選択',
+    name: 'bg-hero',
+    onChange: (v) => {
+      cardContainer.style.backgroundImage = v ? `url(./img/${v}.png)` : '';
+    }
+  });
+  const mount = document.getElementById('acc-bg-hero');
+  mount.replaceWith(acc);
+  acc.id = 'acc-bg-hero';
+}
+
+function buildHeroPoolAccordion() {
+  // heroList ではなく heroDisplayList を参照
+  const options = heroDisplayList.map(h => ({ value: h, label: h }));
+  const acc = createAccordion({
+    options,
+    multi: true,
+    max: 3,
+    defaultValues: [],
+    placeholder: 'ヒーローを選択',
+    onChange: (values) => {
+      document.getElementById('hero-pool-cont').textContent = values.join(' / ');
+    }
+  });
+  const mount = document.getElementById('acc-hero-pool');
+  mount.replaceWith(acc);
+  acc.id = 'acc-hero-pool';
+}
+
+// テキストファイルを読み込んで配列化する共通関数
+function loadTextList(path) {
+  return fetch(path)
     .then(r => {
-      if (!r.ok) throw new Error('heroes.txt not found (status ' + r.status + ')');
+      if (!r.ok) throw new Error(`${path} not found (status ${r.status})`);
       return r.text();
     })
-    .then(txt => {
-      heroList = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-    })
-    .catch((err) => {
-      console.warn('ヒーロー一覧の読み込みに失敗しました:', err);
-      heroList = [];
-    })
-    .finally(() => {
-      buildBgHeroAccordion();
-      buildHeroPoolAccordion();
+    .then(txt => txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean))
+    .catch(err => {
+      console.warn(`${path} の読み込みに失敗しました:`, err);
+      return [];
     });
+}
+
+// 2つのファイルを並行して取得し、両方終わったら描画する
+Promise.all([
+  loadTextList('./text/heroes.txt'),
+  loadTextList('./text/heroes_for_display.txt')
+]).then(([heroes, heroesForDisplay]) => {
+  heroList = heroes;
+  heroDisplayList = heroesForDisplay;
+  
+  buildBgHeroAccordion();
+  buildHeroPoolAccordion();
+});
 
   /* =========================================================
      ② プロフィール
