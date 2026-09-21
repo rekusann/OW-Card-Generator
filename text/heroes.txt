@@ -44,7 +44,7 @@ Ana
 Baptiste
 Brigitte
 Illari
-Jetpack Cat
+Jetpack_Cat
 Juno
 Kiriko
 Lifeweaver
