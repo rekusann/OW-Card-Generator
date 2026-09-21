@@ -4,7 +4,7 @@ D.Va
 Domina
 Doomfist
 Hazard
-Junker Queen
+Junker-Queen
 Mauga
 Orisa
 Ramattra
@@ -12,7 +12,7 @@ Reinhardt
 Roadhog
 Sigma
 Winnston
-Wrecking Ball
+Wrecking-Ball
 Zarya
 <DAMAGE>
 Anran
@@ -31,7 +31,7 @@ Reaper
 Shion
 Sierra
 Sojourn
-Soldier 76
+Soldier-76
 Sombra
 Symmetra
 Torbjourn
@@ -44,7 +44,7 @@ Ana
 Baptiste
 Brigitte
 Illari
-Jetpack Cat
+Jetpack-Cat
 Juno
 Kiriko
 Lifeweaver
