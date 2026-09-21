@@ -1,0 +1,56 @@
+<TANK>
+D.mon
+D.va
+Domina
+Doomfist
+Hazard
+Junker Queen
+Mauga
+Orisa
+Ramattra
+Reinhardt
+Roadhog
+Sigma
+Winnston
+Wrecking Ball
+Zarya
+<DAMAGE>
+Anran
+Ashe
+Bastion
+Cassidy
+Echo
+Emre
+Freja
+Genji
+Hanzo
+Junkrat
+Mei
+Pharah
+Reaper
+Shion
+Sierra
+Sojourn
+Soldier 76
+Sombra
+Symmetra
+Torbjourn
+Tracer
+Vendetta
+Venture
+Widowmaker
+<SUPPORT>
+Ana
+Baptiste
+Brigitte
+Illari
+Jetpack Cat
+Juno
+Kiriko
+Lifeweaver
+Lucio
+Mercy
+Mizuki
+Moira
+Wuyang
+Zenyatta
