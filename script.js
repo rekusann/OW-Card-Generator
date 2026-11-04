@@ -19,7 +19,13 @@
     battletag: '',
     roles: [],
     heroPool: [],
-    sections: { results: true, intro: true, interview: true, wtpl: true },
+    devices: [
+      { label: 'Mouse', value: '' },
+      { label: 'Keyboard', value: '' },
+      { label: 'Headset', value: '' },
+      { label: 'Monitor', value: '' }
+    ],
+    sections: { device: true, results: true, intro: true, interview: true, wtpl: true },
     results: [
       { year: '2025', month: '01', title: 'Overwatch Champion Series', rank: '1' }
     ],
@@ -30,7 +36,8 @@
     wtpl: [
       { name: 'user', xid: 'user', comment: 'がんばって', avatar: '' }
     ],
-    scale: '1'
+    scale: '1',
+    layout: 'single' // 'single' = 1枚 / 'split' = 2枚に分ける
   };
 
   /* =========================================================
@@ -332,7 +339,16 @@
   const previewPane = document.getElementById('preview-pane');
   const previewWrapper = document.getElementById('preview-scale-wrapper');
   const previewInner = document.getElementById('preview-scale-inner');
+  const cardsEl = document.getElementById('cards');
   const cardContainer = document.getElementById('card-container');
+  const cardContainer2 = document.getElementById('card-container-2');
+
+  // 2枚目の上部（カード番号・タグ・ロゴ）は1枚目と同じものを複製して使う
+  cardContainer2.appendChild(cardContainer.querySelector('.card-info').cloneNode(true));
+
+  function setTextAll(selector, text) {
+    cardsEl.querySelectorAll(selector).forEach(el => { el.textContent = text; });
+  }
 
   function updatePreviewScale() {
     const paneStyle = getComputedStyle(previewPane);
@@ -340,47 +356,73 @@
     const availWidth = Math.max(previewPane.clientWidth - padX, 50);
     const scale = availWidth / NATURAL_WIDTH;
     previewInner.style.transform = `scale(${scale})`;
-    const naturalHeight = cardContainer.offsetHeight;
+    const naturalHeight = cardsEl.offsetHeight;
     previewWrapper.style.width = availWidth + 'px';
     previewWrapper.style.height = (naturalHeight * scale) + 'px';
   }
 
   window.addEventListener('resize', updatePreviewScale);
-  new ResizeObserver(updatePreviewScale).observe(cardContainer);
+  new ResizeObserver(updatePreviewScale).observe(cardsEl);
 
   /* =========================================================
      見出し番号（表示中のセクションだけで 01, 02... と振る）
   ========================================================= */
   function renumberHeadings() {
     let n = 0;
-    cardContainer.querySelectorAll('.heading').forEach(h => {
+    cardsEl.querySelectorAll('.heading').forEach(h => {
       if (h.parentElement.style.display === 'none') return;
       n += 1;
       h.textContent = pad2(n) + ' ' + h.dataset.title;
     });
   }
 
+  // page: 2枚に分けたときに何枚目に載せるか（並び順はこの順番）
   const SECTIONS = {
-    results: { checkbox: 'chk-sec-results', el: '.sec-results' },
-    intro: { checkbox: 'chk-sec-intro', el: '.sec-self-introduction' },
-    interview: { checkbox: 'chk-sec-interview', el: '.sec-mini-interview' },
-    wtpl: { checkbox: 'chk-sec-wtpl', el: '.sec-wtpl' }
+    profile: { el: '.sec-player-profile', page: 1 },
+    device: { checkbox: 'chk-sec-device', el: '.sec-device', page: 1 },
+    results: { checkbox: 'chk-sec-results', el: '.sec-results', page: 1 },
+    intro: { checkbox: 'chk-sec-intro', el: '.sec-self-introduction', page: 2 },
+    interview: { checkbox: 'chk-sec-interview', el: '.sec-mini-interview', page: 2 },
+    wtpl: { checkbox: 'chk-sec-wtpl', el: '.sec-wtpl', page: 2 }
   };
+  Object.values(SECTIONS).forEach(cfg => { cfg.node = cardContainer.querySelector(cfg.el); });
+
+  function isSectionVisible(key) {
+    if (key === 'profile') return true;
+    if (!state.sections[key]) return false;
+    if (key === 'device') return state.devices.some(d => d.value.trim());
+    return true;
+  }
+
+  function isSplit() {
+    return state.layout === 'split';
+  }
+
+  // セクションの表示/非表示と、1枚目・2枚目への振り分けをまとめて反映する
+  function refreshLayout() {
+    const split = isSplit();
+    Object.entries(SECTIONS).forEach(([key, cfg]) => {
+      cfg.node.style.display = isSectionVisible(key) ? '' : 'none';
+      (split && cfg.page === 2 ? cardContainer2 : cardContainer).appendChild(cfg.node);
+    });
+    cardContainer2.hidden = !split;
+    cardsEl.classList.toggle('is-split', split);
+    cardContainer.querySelector('.js-card-page').textContent = split ? '1/2' : '';
+    cardContainer2.querySelector('.js-card-page').textContent = split ? '2/2' : '';
+    document.getElementById('layout-note').hidden = !split;
+    renumberHeadings();
+    updatePreviewScale();
+  }
 
   Object.entries(SECTIONS).forEach(([key, cfg]) => {
+    if (!cfg.checkbox) return;
     const chk = document.getElementById(cfg.checkbox);
-    const sec = cardContainer.querySelector(cfg.el);
-    function apply() {
-      sec.style.display = state.sections[key] ? '' : 'none';
-      renumberHeadings();
-    }
     chk.checked = state.sections[key];
     chk.addEventListener('change', () => {
       state.sections[key] = chk.checked;
-      apply();
+      refreshLayout();
       save();
     });
-    apply();
   });
 
   /* =========================================================
@@ -388,7 +430,6 @@
   ========================================================= */
   const cardNumberOptions = [];
   for (let i = 1; i <= 99; i++) cardNumberOptions.push({ value: pad2(i), label: pad2(i) });
-  const cardNumberEl = document.getElementById('card-number');
   mountAccordion('acc-card-number', createAccordion({
     options: cardNumberOptions,
     value: state.cardNumber,
@@ -396,23 +437,25 @@
     labelledBy: 'lbl-card-number',
     onChange: (v) => {
       state.cardNumber = v;
-      cardNumberEl.textContent = v;
+      setTextAll('.js-card-number', v);
       save();
     }
   }));
-  cardNumberEl.textContent = state.cardNumber;
+  setTextAll('.js-card-number', state.cardNumber);
 
   bindText(document.getElementById('input-tag'), state, 'tag', (v) => {
-    document.getElementById('card-tag').textContent = v;
+    setTextAll('.js-card-tag', v);
   }, { halfWidth: true });
 
   const logoChk = document.getElementById('chk-logo');
-  const logoImg = document.getElementById('revati-logo-img');
+  function renderLogo() {
+    cardsEl.querySelectorAll('.js-logo').forEach(img => { img.style.display = state.showLogo ? '' : 'none'; });
+  }
   logoChk.checked = state.showLogo;
-  logoImg.style.display = state.showLogo ? '' : 'none';
+  renderLogo();
   logoChk.addEventListener('change', () => {
     state.showLogo = logoChk.checked;
-    logoImg.style.display = state.showLogo ? '' : 'none';
+    renderLogo();
     save();
   });
 
@@ -443,17 +486,18 @@
   function applyBackground() {
     const file = state.bgHero;
     bgWarningEl.hidden = true;
+    const setBg = (v) => { [cardContainer, cardContainer2].forEach(c => { c.style.backgroundImage = v; }); };
     if (!file) {
-      cardContainer.style.backgroundImage = 'none';
+      setBg('none');
       return;
     }
     const src = heroImageSrc(file);
     imageExists(src).then(ok => {
       if (state.bgHero !== file) return; // 途中で別のキャラが選ばれた
       if (ok) {
-        cardContainer.style.backgroundImage = `url("${src}")`;
+        setBg(`url("${src}")`);
       } else {
-        cardContainer.style.backgroundImage = 'none';
+        setBg('none');
         bgWarningEl.textContent = `画像が見つかりません（img/${file}.png）`;
         bgWarningEl.hidden = false;
       }
@@ -591,7 +635,60 @@
   renderRoles(state.roles);
 
   /* =========================================================
-     ③ 過去の大会結果
+     ③ 使用デバイス
+  ========================================================= */
+  const deviceTbody = document.getElementById('device-tbody');
+  const deviceFormList = document.getElementById('device-form-list');
+
+  function addDeviceRow(d) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="date device-label"></td>
+      <td class="divider">|</td>
+      <td class="title"></td>
+    `;
+    deviceTbody.appendChild(tr);
+    const labelTd = tr.querySelector('.device-label');
+    const valueTd = tr.querySelector('.title');
+
+    const item = document.createElement('div');
+    item.className = 'repeat-item';
+
+    const labelLabel = makeLabel('項目');
+    const labelInput = makeTextInput(labelLabel, { placeholder: 'Mouse など' });
+    labelInput.setAttribute('list', 'device-label-suggestions');
+    bindText(labelInput, d, 'label', (v) => { labelTd.textContent = v; });
+
+    const valueLabel = makeLabel('内容');
+    const valueInput = makeTextInput(valueLabel, { placeholder: '製品名・設定値など' });
+    bindText(valueInput, d, 'value', (v) => {
+      valueTd.textContent = v;
+      // 内容が空の行はカードに出さない
+      tr.style.display = v.trim() ? '' : 'none';
+      refreshLayout();
+    });
+
+    const removeBtn = makeRemoveButton(() => {
+      state.devices.splice(state.devices.indexOf(d), 1);
+      tr.remove();
+      item.remove();
+      save();
+      refreshLayout();
+    });
+
+    item.append(labelLabel, labelInput, valueLabel, valueInput, removeBtn);
+    deviceFormList.appendChild(item);
+  }
+
+  document.getElementById('btn-add-device').addEventListener('click', () => {
+    const d = { label: '', value: '' };
+    state.devices.push(d);
+    addDeviceRow(d);
+    save();
+  });
+
+  /* =========================================================
+     ④ 過去の大会結果
   ========================================================= */
   const resultsTbody = document.getElementById('results-tbody');
   const resultsFormList = document.getElementById('results-form-list');
@@ -676,14 +773,14 @@
   });
 
   /* =========================================================
-     ④ 自己紹介
+     ⑤ 自己紹介
   ========================================================= */
   bindText(document.getElementById('input-intro'), state, 'intro', (v) => {
     document.getElementById('self-intro-el').textContent = v;
   });
 
   /* =========================================================
-     ⑤ 一問一答
+     ⑥ 一問一答
   ========================================================= */
   const interviewListEl = document.getElementById('interview-list-el');
   const interviewFormList = document.getElementById('interview-form-list');
@@ -731,7 +828,7 @@
   });
 
   /* =========================================================
-     ⑥ 他己紹介
+     ⑦ 他己紹介
   ========================================================= */
   const wtplListEl = document.getElementById('wtpl-list-el');
   const wtplFormList = document.getElementById('wtpl-form-list');
@@ -861,8 +958,29 @@
   });
 
   /* =========================================================
-     ⑦ 画像出力
+     ⑧ 画像出力
   ========================================================= */
+  mountAccordion('acc-layout', createAccordion({
+    options: [
+      { value: 'single', label: '1枚にまとめる' },
+      { value: 'split', label: '2枚に分ける' }
+    ],
+    value: state.layout,
+    labelledBy: 'lbl-layout',
+    onChange: (v) => {
+      state.layout = v;
+      refreshLayout();
+      save();
+    }
+  }));
+
+  // 出力するカード（2枚目に表示中のセクションがなければ1枚目だけ）
+  function exportTargets() {
+    if (!isSplit()) return [cardContainer];
+    const page2HasContent = Object.entries(SECTIONS).some(([key, cfg]) => cfg.page === 2 && isSectionVisible(key));
+    return page2HasContent ? [cardContainer, cardContainer2] : [cardContainer];
+  }
+
   const scaleOptions = ['1', '1.5', '2', '2.5', '3'].map(v => ({
     value: v,
     label: v === '1' ? '等倍 (×1)' : `×${v}`
@@ -873,13 +991,15 @@
     placeholder: 'サイズを選択',
     labelledBy: 'lbl-scale',
     onBeforeOpen: () => {
-      const naturalH = cardContainer.offsetHeight;
+      const targets = exportTargets();
+      const naturalH = targets[0].offsetHeight;
+      const count = targets.length > 1 ? ` ×${targets.length}枚` : '';
       scaleOptions.forEach(o => {
         const s = parseFloat(o.value);
         const w = Math.round(NATURAL_WIDTH * s);
         const h = Math.round(naturalH * s);
         const base = o.value === '1' ? '等倍' : `×${o.value}`;
-        scaleAcc.updateOptionLabel(o.value, `${base}（${w}×${h}px）`);
+        scaleAcc.updateOptionLabel(o.value, `${base}（${w}×${h}px${count}）`);
       });
     },
     onChange: (v) => {
@@ -895,15 +1015,18 @@
     previewInner.style.transform = 'none';
     await new Promise(requestAnimationFrame);
     try {
-      const canvas = await html2canvas(cardContainer, {
-        scale,
-        useCORS: true,
-        backgroundColor: null
-      });
-      const link = document.createElement('a');
-      link.download = 'card.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const targets = exportTargets();
+      for (let i = 0; i < targets.length; i++) {
+        const canvas = await html2canvas(targets[i], {
+          scale,
+          useCORS: true,
+          backgroundColor: null
+        });
+        const link = document.createElement('a');
+        link.download = targets.length > 1 ? `card-${i + 1}.png` : 'card.png';
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+      }
     } catch (err) {
       alert('画像の出力に失敗しました: ' + err.message);
     } finally {
@@ -926,9 +1049,10 @@
   /* =========================================================
      繰り返し項目の初期描画
   ========================================================= */
+  state.devices.forEach(addDeviceRow);
   state.results.forEach(addResultRow);
   state.interview.forEach(addInterviewItem);
   state.wtpl.forEach(addWtplCard);
 
-  updatePreviewScale();
+  refreshLayout();
 })();

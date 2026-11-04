@@ -102,6 +102,21 @@
     margin-bottom: 24px;
 }
 
+/* device（大会結果と同じ表スタイルを使う） */
+.sec-device {
+    z-index: 2;
+}
+
+.results-table .device-label {
+    color: var(--sub-text);
+}
+
+/* 2枚に分けるときのページ番号 */
+.card-page {
+    padding-left: 16px;
+    color: var(--sub-text);
+}
+
 /* result-table */
 .sec-results {
     z-index: 2;
@@ -577,4 +592,23 @@ textarea.form-input {
 .avatar-reset-btn {
     margin-top: 0;
     flex-shrink: 0;
+}
+
+.field-note {
+    font-size: 11px;
+    color: #777;
+    margin: 4px 0 0;
+    line-height: 1.5;
+}
+
+/* プレビュー：2枚分割時は同じ高さで縦に並べる */
+.container[hidden] {
+    display: none;
+}
+
+.cards.is-split {
+    display: grid;
+    grid-template-columns: 1800px;
+    grid-auto-rows: 1fr;
+    row-gap: 48px;
 }
