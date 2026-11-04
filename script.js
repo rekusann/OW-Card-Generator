@@ -5,7 +5,7 @@
      初期値（フォームとプレビューはすべてここから作る）
   ========================================================= */
   const STORAGE_KEY = 'ow-card-generator:v1';
-  const NATURAL_WIDTH = 1800;
+  const ART_OVERLAP_RATIO = 0.4; // 背景キャラ画像の左側で、内容が重なってもよい割合
   const AVATAR_SIZE = 360; // 書き出し×3でも粗くならないサイズ
   const DEFAULT_AVATAR = './img/icon.png';
 
@@ -348,19 +348,51 @@
     cardsEl.querySelectorAll(selector).forEach(el => { el.textContent = text; });
   }
 
+  /* =========================================================
+     カードの横幅を内容に合わせる
+     横幅 = 内容の幅 + 背景キャラの濃い部分の幅
+     （背景画像の左側 ART_OVERLAP_RATIO ぶんは透明〜薄いので、内容が重なってもよい）
+  ========================================================= */
+  let bgAspect = 0; // 背景画像の 幅/高さ。0 は背景なし
+
+  function fitCardWidths() {
+    [cardContainer, cardContainer2].forEach(card => {
+      if (card.hidden) return;
+      card.style.width = 'max-content';
+      const contentWidth = card.offsetWidth;
+      // .container の background-size: auto 101% に合わせる
+      const artWidth = bgAspect ? card.offsetHeight * 1.01 * bgAspect : 0;
+      card.style.width = Math.ceil(contentWidth + artWidth * (1 - ART_OVERLAP_RATIO)) + 'px';
+    });
+    updatePreviewScale();
+  }
+
+  let fitScheduled = false;
+  function scheduleFit() {
+    if (fitScheduled) return;
+    fitScheduled = true;
+    requestAnimationFrame(() => {
+      fitScheduled = false;
+      fitCardWidths();
+    });
+  }
+
   function updatePreviewScale() {
     const paneStyle = getComputedStyle(previewPane);
     const padX = parseFloat(paneStyle.paddingLeft) + parseFloat(paneStyle.paddingRight);
     const availWidth = Math.max(previewPane.clientWidth - padX, 50);
-    const scale = availWidth / NATURAL_WIDTH;
+    const naturalWidth = Math.max(cardsEl.offsetWidth, 1);
+    const scale = Math.min(availWidth / naturalWidth, 1);
     previewInner.style.transform = `scale(${scale})`;
     const naturalHeight = cardsEl.offsetHeight;
-    previewWrapper.style.width = availWidth + 'px';
+    previewWrapper.style.width = (naturalWidth * scale) + 'px';
     previewWrapper.style.height = (naturalHeight * scale) + 'px';
   }
 
   window.addEventListener('resize', updatePreviewScale);
-  new ResizeObserver(updatePreviewScale).observe(cardsEl);
+  // 文字や行が変わったら幅を測り直す（style の変更は見ない＝自分の変更でループしない）
+  new MutationObserver(scheduleFit).observe(cardsEl, { childList: true, characterData: true, subtree: true });
+  if (document.fonts) document.fonts.ready.then(scheduleFit);
 
   /* =========================================================
      見出し番号（表示中のセクションだけで 01, 02... と振る）
@@ -407,7 +439,7 @@
     cardsEl.classList.toggle('is-split', split);
     document.getElementById('layout-note').hidden = !split;
     renumberHeadings();
-    updatePreviewScale();
+    scheduleFit();
   }
 
   Object.entries(SECTIONS).forEach(([key, cfg]) => {
@@ -471,8 +503,8 @@
     if (!imageCheckCache.has(src)) {
       imageCheckCache.set(src, new Promise(resolve => {
         const img = new Image();
-        img.onload = () => resolve(true);
-        img.onerror = () => resolve(false);
+        img.onload = () => resolve(img);
+        img.onerror = () => resolve(null);
         img.src = src;
       }));
     }
@@ -482,18 +514,22 @@
   function applyBackground() {
     const file = state.bgHero;
     bgWarningEl.hidden = true;
-    const setBg = (v) => { [cardContainer, cardContainer2].forEach(c => { c.style.backgroundImage = v; }); };
+    const setBg = (v, aspect) => {
+      [cardContainer, cardContainer2].forEach(c => { c.style.backgroundImage = v; });
+      bgAspect = aspect;
+      scheduleFit();
+    };
     if (!file) {
-      setBg('none');
+      setBg('none', 0);
       return;
     }
     const src = heroImageSrc(file);
-    imageExists(src).then(ok => {
+    imageExists(src).then(img => {
       if (state.bgHero !== file) return; // 途中で別のキャラが選ばれた
-      if (ok) {
-        setBg(`url("${src}")`);
+      if (img) {
+        setBg(`url("${src}")`, img.naturalWidth / img.naturalHeight);
       } else {
-        setBg('none');
+        setBg('none', 0);
         bgWarningEl.textContent = `画像が見つかりません（img/${file}.png）`;
         bgWarningEl.hidden = false;
       }
@@ -987,15 +1023,13 @@
     placeholder: 'サイズを選択',
     labelledBy: 'lbl-scale',
     onBeforeOpen: () => {
+      // カードごとに横幅が違うので、1枚ずつサイズを並べる
       const targets = exportTargets();
-      const naturalH = targets[0].offsetHeight;
-      const count = targets.length > 1 ? ` ×${targets.length}枚` : '';
       scaleOptions.forEach(o => {
         const s = parseFloat(o.value);
-        const w = Math.round(NATURAL_WIDTH * s);
-        const h = Math.round(naturalH * s);
+        const sizes = targets.map(t => `${Math.round(t.offsetWidth * s)}×${Math.round(t.offsetHeight * s)}`);
         const base = o.value === '1' ? '等倍' : `×${o.value}`;
-        scaleAcc.updateOptionLabel(o.value, `${base}（${w}×${h}px${count}）`);
+        scaleAcc.updateOptionLabel(o.value, `${base}（${sizes.join(' / ')}px）`);
       });
     },
     onChange: (v) => {

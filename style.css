@@ -25,7 +25,7 @@
     flex-direction: column;
     gap: 24px;
     box-sizing: border-box;
-    width: 1800px;
+    width: max-content; /* 実際の横幅はJSで内容＋背景キャラの幅に合わせる */
     background: var(--background);
     background-repeat: no-repeat;
     background-position: top right;
@@ -180,7 +180,7 @@
     font-weight: 400;
     line-height: 1.4;
     letter-spacing: -0.05rem;
-    width: 45%;
+    max-width: 767px; /* 以前の横幅1800px時の 45% と同じ */
     margin-left: 16px;
     margin-top: 16px;
     white-space: pre-wrap;
@@ -196,7 +196,6 @@
     font-size: 20px;
     font-weight: 700;
     letter-spacing: -0.05rem;
-    width: 100%;
     margin-left: 16px;
     margin-top: 16px;
 }
@@ -209,12 +208,12 @@
 .q-text{
     margin-top: 20px;
     width: fit-content;
-    max-width: 70%; 
+    max-width: 1193px; /* 以前の横幅1800px時の 70% と同じ */
 }
 
 .a-text{
     width: fit-content;
-    max-width: 70%; 
+    max-width: 1193px; /* 以前の横幅1800px時の 70% と同じ */
     margin-left: 12px;
     padding: 6px 16px;
     background: var(--item-bg);
@@ -232,7 +231,7 @@
     font-family: "LINE Seed JP", sans-serif;
     font-size: 20px;
     font-weight: 500;
-    width: 70%;
+    max-width: 1193px; /* 以前の横幅1800px時の 70% と同じ */
     margin-left: 16px;
     margin-top: 16px;
 }
@@ -595,14 +594,19 @@ textarea.form-input {
     line-height: 1.5;
 }
 
-/* プレビュー：2枚分割時は同じ高さで縦に並べる */
+/* プレビュー：2枚分割時は同じ高さで縦に並べる（横幅はそれぞれの内容に合わせる） */
 .container[hidden] {
     display: none;
 }
 
+.cards {
+    width: max-content;
+}
+
 .cards.is-split {
     display: grid;
-    grid-template-columns: 1800px;
+    grid-template-columns: max-content;
+    justify-items: start;
     grid-auto-rows: 1fr;
     row-gap: 48px;
 }
