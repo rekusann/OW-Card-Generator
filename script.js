@@ -345,6 +345,19 @@
 
   // 2枚目の上部（カード番号・タグ・ロゴ）は1枚目と同じものを複製して使う
   cardContainer2.appendChild(cardContainer.querySelector('.card-info').cloneNode(true));
+  // 2枚目だけ見ても誰のカードかわかるよう、1枚目と同じスタイルで名前を置く
+  const page2Name = document.createElement('div');
+  page2Name.className = 'sec-page2-name';
+  page2Name.innerHTML = '<div class="player-name js-player-name"></div>';
+  cardContainer2.appendChild(page2Name);
+
+  // 2枚目の名前を1枚目の名前と同じ高さにそろえる（1枚目は見出しの分だけ下にある）
+  function alignPage2Name() {
+    if (cardContainer2.hidden) return;
+    const page1Name = cardContainer.querySelector('.js-player-name');
+    page2Name.style.paddingTop = '0px';
+    page2Name.style.paddingTop = Math.max(0, page1Name.offsetTop - page2Name.offsetTop) + 'px';
+  }
 
   function setTextAll(selector, text) {
     cardsEl.querySelectorAll(selector).forEach(el => { el.textContent = text; });
@@ -411,8 +424,12 @@
     cardContainer2.querySelector('.js-card-page').textContent = split ? '2/2' : '';
     document.getElementById('layout-note').hidden = !split;
     renumberHeadings();
+    alignPage2Name();
     updatePreviewScale();
   }
+
+  // Webフォント読み込み後に高さが変わるので、そろえ直す
+  if (document.fonts) document.fonts.ready.then(() => refreshLayout());
 
   Object.entries(SECTIONS).forEach(([key, cfg]) => {
     if (!cfg.checkbox) return;
@@ -601,7 +618,7 @@
      ② プロフィール
   ========================================================= */
   bindText(document.getElementById('input-name'), state, 'name', (v) => {
-    document.getElementById('player-name-el').textContent = v;
+    setTextAll('.js-player-name', v);
   });
 
   bindText(document.getElementById('input-xid'), state, 'xid', (v) => {
