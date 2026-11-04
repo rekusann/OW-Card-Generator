@@ -5,7 +5,7 @@
      初期値（フォームとプレビューはすべてここから作る）
   ========================================================= */
   const STORAGE_KEY = 'ow-card-generator:v1';
-  const ART_OVERLAP_RATIO = 0.4; // 背景キャラ画像の左側で、内容が重なってもよい割合
+  const ART_OVERLAP_RATIO = 0.6; // 背景キャラ画像の左側で、内容が重なってもよい割合
   const AVATAR_SIZE = 360; // 書き出し×3でも粗くならないサイズ
   const DEFAULT_AVATAR = './img/icon.png';
 
@@ -356,14 +356,17 @@
   let bgAspect = 0; // 背景画像の 幅/高さ。0 は背景なし
 
   function fitCardWidths() {
-    [cardContainer, cardContainer2].forEach(card => {
-      if (card.hidden) return;
+    // 2枚に分けたときも同じサイズにするため、いちばん広いカードに合わせる
+    const cards = [cardContainer, cardContainer2].filter(card => !card.hidden);
+    const widths = cards.map(card => {
       card.style.width = 'max-content';
       const contentWidth = card.offsetWidth;
       // .container の background-size: auto 101% に合わせる
       const artWidth = bgAspect ? card.offsetHeight * 1.01 * bgAspect : 0;
-      card.style.width = Math.ceil(contentWidth + artWidth * (1 - ART_OVERLAP_RATIO)) + 'px';
+      return contentWidth + artWidth * (1 - ART_OVERLAP_RATIO);
     });
+    const width = Math.ceil(Math.max(...widths)) + 'px';
+    cards.forEach(card => { card.style.width = width; });
     updatePreviewScale();
   }
 
