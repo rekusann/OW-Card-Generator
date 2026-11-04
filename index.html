@@ -18,41 +18,43 @@
   <!-- フォーム -->
   <div class="form-pane">
     <h1 class="form-title">Card Generator</h1>
+    <p class="form-status" id="save-status">入力内容はこのブラウザに自動保存されます</p>
 
     <fieldset class="form-section">
       <legend>① カード情報</legend>
 
-      <label class="field-label">数字</label>
+      <div class="field-label" id="lbl-card-number">数字</div>
       <div id="acc-card-number" class="field-mount"></div>
 
-      <label class="field-label">タグ</label>
-      <input type="text" id="input-tag" class="form-input" value="#LookingForTeam">
+      <label class="field-label" for="input-tag">タグ</label>
+      <input type="text" id="input-tag" class="form-input">
 
       <label class="field-label checkbox-line">
         <input type="checkbox" id="chk-logo" class="form-checkbox" checked>
         ロゴを表示する
       </label>
 
-      <label class="field-label">背景キャラ</label>
+      <div class="field-label" id="lbl-bg-hero">背景キャラ</div>
       <div id="acc-bg-hero" class="field-mount">読み込み中...</div>
+      <p class="field-warning" id="bg-hero-warning" hidden></p>
     </fieldset>
 
     <fieldset class="form-section">
       <legend>② プロフィール</legend>
 
-      <label class="field-label">名前</label>
-      <input type="text" id="input-name" class="form-input" value="Player">
+      <label class="field-label" for="input-name">名前</label>
+      <input type="text" id="input-name" class="form-input">
 
-      <label class="field-label">XのID</label>
+      <label class="field-label" for="input-xid">XのID（@なし）</label>
       <input type="text" id="input-xid" class="form-input" placeholder="player_1234">
 
-      <label class="field-label">In Game Name</label>
+      <label class="field-label" for="input-battletag">In Game Name</label>
       <input type="text" id="input-battletag" class="form-input" placeholder="Player#1234">
 
-      <label class="field-label">ロール（最大2つ）</label>
+      <div class="field-label" id="lbl-role">ロール（最大2つ）</div>
       <div id="acc-role" class="field-mount"></div>
 
-      <label class="field-label">得意ヒーロー（最大3人）</label>
+      <div class="field-label" id="lbl-hero-pool">得意ヒーロー（最大3人）</div>
       <div id="acc-hero-pool" class="field-mount">読み込み中...</div>
     </fieldset>
 
@@ -76,8 +78,8 @@
         </label>
       </legend>
 
-      <label class="field-label">自己紹介文</label>
-      <textarea id="input-intro" class="form-input" rows="4">こんにちは</textarea>
+      <label class="field-label" for="input-intro">自己紹介文</label>
+      <textarea id="input-intro" class="form-input" rows="4"></textarea>
     </fieldset>
 
     <fieldset class="form-section">
@@ -107,11 +109,13 @@
     <fieldset class="form-section">
       <legend>⑦ 画像出力</legend>
 
-      <label class="field-label">画像サイズ</label>
+      <div class="field-label" id="lbl-scale">画像サイズ</div>
       <div id="acc-scale" class="field-mount"></div>
 
       <button type="button" id="btn-export" class="form-btn form-btn-primary">PNGを出力する</button>
     </fieldset>
+
+    <button type="button" id="btn-reset" class="form-btn form-btn-danger">入力内容をリセット</button>
   </div>
 
   <!-- プレビュー -->
@@ -122,15 +126,15 @@
         <div class="container" id="card-container">
           <div class="card-info">
             <div class="card-info-0">
-              <div class="card-info-1"><span id="card-number">01</span><span class="code">lllll l  ll lll l l l ll llllll ll ll</span></div>
-              <div class="card-info-2" id="card-tag">#LookingForTeam</div>
+              <div class="card-info-1"><span id="card-number"></span><span class="code">lllll l  ll lll l l l ll llllll ll ll</span></div>
+              <div class="card-info-2" id="card-tag"></div>
             </div>
             <img src="./img/rev_logo.png" class="revati-logo" id="revati-logo-img" alt="revati_logo">
           </div>
 
           <div class="sec-player-profile">
-            <div class="heading">01 Player_Profile</div>
-            <div class="player-name" id="player-name-el">Player</div>
+            <div class="heading" data-title="Player_Profile"></div>
+            <div class="player-name" id="player-name-el"></div>
             <div class="prof-el" id="x-id"><div class="sub-heading">[X_ID]</div><span id="x-id-value"></span></div>
             <div class="prof-el" id="battletag"> <div class="sub-heading">[In_Game_Name]</div> <div id="battletag-cont"><span id="battletag-name"></span><span id="battletag-cont-2"></span></div> </div>
             <div class="prof-el" id="role"> <div class="sub-heading">[Role]</div> <div id="role-cont"></div> </div>
@@ -138,7 +142,7 @@
           </div>
 
           <div class="sec-results">
-            <div class="heading">02 Results</div>
+            <div class="heading" data-title="Results"></div>
             <div class="results-table-box">
               <table class="results-table">
                 <tbody id="results-tbody"></tbody>
@@ -147,17 +151,17 @@
           </div>
 
           <div class="sec-self-introduction">
-            <div class="heading">03 Self_Introduction</div>
-            <div class="self-introduction" id="self-intro-el">こんにちは</div>
+            <div class="heading" data-title="Self_Introduction"></div>
+            <div class="self-introduction" id="self-intro-el"></div>
           </div>
 
           <div class="sec-mini-interview">
-            <div class="heading">04 Mini_Interview</div>
+            <div class="heading" data-title="Mini_Interview"></div>
             <div class="mini-interview" id="interview-list-el"></div>
           </div>
 
           <div class="sec-wtpl">
-            <div class="heading">05 What_is_the_player_like?</div>
+            <div class="heading" data-title="What_is_the_player_like?"></div>
             <div class="wtpl" id="wtpl-list-el"></div>
           </div>
         </div>

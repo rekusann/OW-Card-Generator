@@ -27,7 +27,6 @@
     box-sizing: border-box;
     width: 1800px;
     background: var(--background);
-    background-image: url(./img/tracer.png);
     background-repeat: no-repeat;
     background-position: top right;
     background-size: auto 101%;
@@ -510,4 +509,72 @@ textarea.form-input {
 
 .preview-scale-inner {
     transform-origin: top left;
+}
+
+/* 保存状態・警告 */
+.form-status {
+    font-size: 11px;
+    color: #777;
+    margin: -10px 0 14px;
+}
+
+.form-status.is-error,
+.field-warning {
+    color: #c0392b;
+}
+
+.field-warning {
+    font-size: 12px;
+    margin: 4px 0 0;
+}
+
+.form-btn-danger {
+    display: block;
+    width: 100%;
+    margin: 0 0 16px;
+    padding: 6px;
+    color: #c0392b;
+}
+
+/* アコーディオンの見出し・選べない選択肢 */
+.accordion-group-header {
+    padding: 6px 8px 2px;
+    font-size: 11px;
+    font-weight: bold;
+    color: #888;
+    letter-spacing: 0.05em;
+}
+
+.accordion-option.is-disabled {
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.accordion-option.is-disabled:hover {
+    background: none;
+}
+
+/* 他己紹介のアバター */
+.avatar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.avatar-row .form-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.avatar-thumb {
+    width: 36px;
+    height: 36px;
+    object-fit: cover;
+    border: 1px solid #ccc;
+    flex-shrink: 0;
+}
+
+.avatar-reset-btn {
+    margin-top: 0;
+    flex-shrink: 0;
 }

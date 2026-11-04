@@ -2,30 +2,138 @@
   'use strict';
 
   /* =========================================================
+     初期値（フォームとプレビューはすべてここから作る）
+  ========================================================= */
+  const STORAGE_KEY = 'ow-card-generator:v1';
+  const NATURAL_WIDTH = 1800;
+  const AVATAR_SIZE = 360; // 書き出し×3でも粗くならないサイズ
+  const DEFAULT_AVATAR = './img/icon.png';
+
+  const DEFAULT_STATE = {
+    cardNumber: '01',
+    tag: '#LookingForTeam',
+    showLogo: true,
+    bgHero: 'Tracer', // img/ 内のファイル名（拡張子なし）。'' は背景なし
+    name: 'Player',
+    xid: '',
+    battletag: '',
+    roles: [],
+    heroPool: [],
+    sections: { results: true, intro: true, interview: true, wtpl: true },
+    results: [
+      { year: '2025', month: '01', title: 'Overwatch Champion Series', rank: '1' }
+    ],
+    intro: 'こんにちは',
+    interview: [
+      { q: '好きなキャラクターは？', a: 'トールビョーンです。' }
+    ],
+    wtpl: [
+      { name: 'user', xid: 'user', comment: 'がんばって', avatar: '' }
+    ],
+    scale: '1'
+  };
+
+  /* =========================================================
+     保存（localStorage）
+  ========================================================= */
+  const saveStatusEl = document.getElementById('save-status');
+
+  function clone(o) {
+    return JSON.parse(JSON.stringify(o));
+  }
+
+  function loadState() {
+    const base = clone(DEFAULT_STATE);
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return base;
+      const saved = JSON.parse(raw);
+      const merged = Object.assign(base, saved);
+      merged.sections = Object.assign(clone(DEFAULT_STATE.sections), saved.sections || {});
+      return merged;
+    } catch (err) {
+      console.warn('保存データの読み込みに失敗しました:', err);
+      return base;
+    }
+  }
+
+  const state = loadState();
+
+  let saveTimer = null;
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        saveStatusEl.textContent = '入力内容はこのブラウザに自動保存されます';
+        saveStatusEl.classList.remove('is-error');
+      } catch (err) {
+        console.warn('保存に失敗しました:', err);
+        saveStatusEl.textContent = '保存できませんでした（画像が大きすぎる可能性があります）';
+        saveStatusEl.classList.add('is-error');
+      }
+    }, 300);
+  }
+
+  /* =========================================================
      共通ユーティリティ
   ========================================================= */
+  const NON_HALF_WIDTH = /[^\x20-\x7E]/g;
 
-  // 半角(ASCII印字可能文字)のみを許可する入力欄に適用
+  // 半角(ASCII印字可能文字)のみを許可する。日本語入力の変換中は触らない
   function restrictToHalfWidth(inputEl) {
-    inputEl.addEventListener('input', () => {
-      const pos = inputEl.selectionStart;
-      const filtered = inputEl.value.replace(/[^\x20-\x7E]/g, '');
-      if (filtered !== inputEl.value) {
-        inputEl.value = filtered;
-        if (pos != null) inputEl.setSelectionRange(pos - 1, pos - 1);
-      }
+    function apply() {
+      const v = inputEl.value;
+      const filtered = v.replace(NON_HALF_WIDTH, '');
+      if (filtered === v) return;
+      const pos = inputEl.selectionStart == null ? v.length : inputEl.selectionStart;
+      const newPos = v.slice(0, pos).replace(NON_HALF_WIDTH, '').length;
+      inputEl.value = filtered;
+      inputEl.setSelectionRange(newPos, newPos);
+    }
+    inputEl.addEventListener('input', (e) => {
+      if (!e.isComposing) apply();
     });
+    inputEl.addEventListener('compositionend', () => {
+      apply();
+      // 変換確定後の値を他のリスナーにも反映させる
+      inputEl.dispatchEvent(new Event('input'));
+    });
+  }
+
+  // テキスト入力欄を state のプロパティと結び付ける
+  function bindText(inputEl, target, key, render, { halfWidth = false, stripAt = false } = {}) {
+    inputEl.value = target[key];
+    if (halfWidth) restrictToHalfWidth(inputEl);
+    inputEl.addEventListener('input', (e) => {
+      if (e.isComposing) return;
+      if (stripAt && inputEl.value.startsWith('@')) {
+        inputEl.value = inputEl.value.replace(/^@+/, '');
+      }
+      target[key] = inputEl.value;
+      render(target[key]);
+      save();
+    });
+    render(target[key]);
   }
 
   function pad2(n) {
     return String(n).padStart(2, '0');
   }
 
+  function rankLabel(value) {
+    return value + '位';
+  }
+
   function rankClassOf(value) {
-    if (value === '1st') return 'rank-1st';
-    if (value === '2nd') return 'rank-2nd';
-    if (value === '3rd') return 'rank-3rd';
+    if (value === '1') return 'rank-1st';
+    if (value === '2') return 'rank-2nd';
+    if (value === '3') return 'rank-3rd';
     return 'rank-other';
+  }
+
+  function formatXid(v) {
+    return v ? '@' + v : '';
   }
 
   let uid = 0;
@@ -34,49 +142,101 @@
     return prefix + uid;
   }
 
+  function confirmRemove() {
+    return window.confirm('この項目を削除しますか？');
+  }
+
+  function makeLabel(text) {
+    const el = document.createElement('label');
+    el.className = 'field-label';
+    el.id = nextId('lbl');
+    el.textContent = text;
+    return el;
+  }
+
+  function makeTextInput(labelEl, { textarea = false, rows = 3, placeholder = '' } = {}) {
+    const el = document.createElement(textarea ? 'textarea' : 'input');
+    if (textarea) el.rows = rows;
+    else el.type = 'text';
+    el.className = 'form-input';
+    el.id = nextId('in');
+    if (placeholder) el.placeholder = placeholder;
+    labelEl.htmlFor = el.id;
+    return el;
+  }
+
+  function makeRemoveButton(onRemove) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'form-btn remove-btn';
+    btn.textContent = '削除';
+    btn.addEventListener('click', () => {
+      if (confirmRemove()) onRemove();
+    });
+    return btn;
+  }
+
   /* =========================================================
      アコーディオン式セレクト（単一選択 / 複数選択共通）
-     options: [{value, label}]
+     options: [{value, label, disabled?}] または見出し {header}
      multi: true なら複数選択（checkbox）、false なら単一選択（radio）
      max: multi の場合の最大選択数
   ========================================================= */
-  function createAccordion({ options, multi = false, max = 1, defaultValues = [], placeholder = '選択してください', name = null, onChange = () => {}, onBeforeOpen = null }) {
+  function createAccordion({ options, multi = false, max = 1, value, placeholder = '選択してください', labelledBy = null, onChange = () => {}, onBeforeOpen = null }) {
     const wrap = document.createElement('div');
     wrap.className = 'accordion-select';
+
+    const groupName = nextId('acc');
 
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'accordion-toggle';
+    toggle.id = groupName + '-toggle';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', groupName + '-panel');
+    if (labelledBy) toggle.setAttribute('aria-labelledby', labelledBy + ' ' + toggle.id);
 
     const panel = document.createElement('div');
     panel.className = 'accordion-panel';
+    panel.id = groupName + '-panel';
 
-    const groupName = name || nextId('acc');
-    let selected = [...defaultValues];
-    const optionItems = []; // {value, labelSpan}
+    let selected = multi ? [...(value || [])] : (value == null ? [] : [value]);
+    const optionItems = []; // {value, input, item, labelSpan, disabled}
 
-    function labelFor(value) {
-      const found = options.find(o => String(o.value) === String(value));
-      return found ? found.label : value;
+    function labelFor(v) {
+      const found = optionItems.find(o => String(o.value) === String(v));
+      return found ? found.labelSpan.textContent : v;
     }
 
     function updateToggleText() {
-      if (selected.length === 0) {
-        toggle.textContent = placeholder + ' ▾';
-      } else {
-        toggle.textContent = selected.map(labelFor).join(' / ') + ' ▾';
-      }
+      toggle.textContent = (selected.length === 0 ? placeholder : selected.map(labelFor).join(' / ')) + ' ▾';
     }
 
     function refreshDisabledState() {
-      if (!multi) return;
-      const atMax = selected.length >= max;
-      optionItems.forEach(({ value, input }) => {
-        if (!input.checked) input.disabled = atMax;
+      const atMax = multi && selected.length >= max;
+      optionItems.forEach(o => {
+        const isChecked = selected.map(String).includes(String(o.value));
+        o.input.checked = isChecked;
+        o.input.disabled = !isChecked && (o.disabled || atMax);
+        o.item.classList.toggle('is-disabled', o.input.disabled);
       });
     }
 
+    function setOpen(open) {
+      wrap.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    }
+    wrap.close = () => setOpen(false);
+
     options.forEach(opt => {
+      if (opt.header) {
+        const header = document.createElement('div');
+        header.className = 'accordion-group-header';
+        header.textContent = opt.header;
+        panel.appendChild(header);
+        return;
+      }
+
       const item = document.createElement('label');
       item.className = 'accordion-option';
 
@@ -85,7 +245,6 @@
       input.name = groupName;
       input.value = opt.value;
       input.className = 'form-checkbox';
-      if (selected.map(String).includes(String(opt.value))) input.checked = true;
 
       const labelSpan = document.createElement('span');
       labelSpan.textContent = opt.label;
@@ -103,7 +262,8 @@
           }
         } else {
           selected = [opt.value];
-          wrap.classList.remove('open');
+          setOpen(false);
+          toggle.focus();
         }
         updateToggleText();
         refreshDisabledState();
@@ -113,17 +273,27 @@
       item.appendChild(input);
       item.appendChild(labelSpan);
       panel.appendChild(item);
-      optionItems.push({ value: opt.value, input, labelSpan });
+      optionItems.push({ value: opt.value, input, item, labelSpan, disabled: !!opt.disabled });
     });
 
     toggle.addEventListener('click', (e) => {
       e.stopPropagation();
       const willOpen = !wrap.classList.contains('open');
       document.querySelectorAll('.accordion-select.open').forEach(el => {
-        if (el !== wrap) el.classList.remove('open');
+        if (el !== wrap) el.close();
       });
       if (willOpen && onBeforeOpen) onBeforeOpen(wrap);
-      wrap.classList.toggle('open', willOpen);
+      setOpen(willOpen);
+    });
+
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    wrap.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && wrap.classList.contains('open')) {
+        e.stopPropagation();
+        setOpen(false);
+        toggle.focus();
+      }
     });
 
     wrap.appendChild(toggle);
@@ -132,25 +302,29 @@
     refreshDisabledState();
 
     wrap.getValue = () => (multi ? [...selected] : selected[0]);
-    wrap.setValue = (v) => {
-      selected = multi ? [...v] : (v == null ? [] : [v]);
-      optionItems.forEach(({ value, input }) => {
-        input.checked = selected.map(String).includes(String(value));
-      });
-      updateToggleText();
-      refreshDisabledState();
-    };
-    wrap.updateOptionLabel = (value, text) => {
-      const found = optionItems.find(o => String(o.value) === String(value));
+    wrap.updateOptionLabel = (v, text) => {
+      const found = optionItems.find(o => String(o.value) === String(v));
       if (found) found.labelSpan.textContent = text;
+      updateToggleText();
+    };
+    wrap.setOptionDisabled = (v, disabled) => {
+      const found = optionItems.find(o => String(o.value) === String(v));
+      if (found) found.disabled = disabled;
+      refreshDisabledState();
     };
 
     return wrap;
   }
 
   document.addEventListener('click', () => {
-    document.querySelectorAll('.accordion-select.open').forEach(el => el.classList.remove('open'));
+    document.querySelectorAll('.accordion-select.open').forEach(el => el.close());
   });
+
+  function mountAccordion(mountId, acc) {
+    const mount = document.getElementById(mountId);
+    mount.replaceWith(acc);
+    acc.id = mountId;
+  }
 
   /* =========================================================
      プレビューの拡大縮小（縦横比を保ったまま幅に合わせる）
@@ -159,7 +333,6 @@
   const previewWrapper = document.getElementById('preview-scale-wrapper');
   const previewInner = document.getElementById('preview-scale-inner');
   const cardContainer = document.getElementById('card-container');
-  const NATURAL_WIDTH = 1800;
 
   function updatePreviewScale() {
     const paneStyle = getComputedStyle(previewPane);
@@ -176,143 +349,246 @@
   new ResizeObserver(updatePreviewScale).observe(cardContainer);
 
   /* =========================================================
+     見出し番号（表示中のセクションだけで 01, 02... と振る）
+  ========================================================= */
+  function renumberHeadings() {
+    let n = 0;
+    cardContainer.querySelectorAll('.heading').forEach(h => {
+      if (h.parentElement.style.display === 'none') return;
+      n += 1;
+      h.textContent = pad2(n) + ' ' + h.dataset.title;
+    });
+  }
+
+  const SECTIONS = {
+    results: { checkbox: 'chk-sec-results', el: '.sec-results' },
+    intro: { checkbox: 'chk-sec-intro', el: '.sec-self-introduction' },
+    interview: { checkbox: 'chk-sec-interview', el: '.sec-mini-interview' },
+    wtpl: { checkbox: 'chk-sec-wtpl', el: '.sec-wtpl' }
+  };
+
+  Object.entries(SECTIONS).forEach(([key, cfg]) => {
+    const chk = document.getElementById(cfg.checkbox);
+    const sec = cardContainer.querySelector(cfg.el);
+    function apply() {
+      sec.style.display = state.sections[key] ? '' : 'none';
+      renumberHeadings();
+    }
+    chk.checked = state.sections[key];
+    chk.addEventListener('change', () => {
+      state.sections[key] = chk.checked;
+      apply();
+      save();
+    });
+    apply();
+  });
+
+  /* =========================================================
      ① カード情報
   ========================================================= */
   const cardNumberOptions = [];
   for (let i = 1; i <= 99; i++) cardNumberOptions.push({ value: pad2(i), label: pad2(i) });
-  const cardNumberAcc = createAccordion({
+  const cardNumberEl = document.getElementById('card-number');
+  mountAccordion('acc-card-number', createAccordion({
     options: cardNumberOptions,
-    defaultValues: ['01'],
+    value: state.cardNumber,
     placeholder: '番号',
-    name: 'card-number',
-    onChange: (v) => { document.getElementById('card-number').textContent = v; }
-  });
-  document.getElementById('acc-card-number').replaceWith(cardNumberAcc);
-  cardNumberAcc.id = 'acc-card-number';
+    labelledBy: 'lbl-card-number',
+    onChange: (v) => {
+      state.cardNumber = v;
+      cardNumberEl.textContent = v;
+      save();
+    }
+  }));
+  cardNumberEl.textContent = state.cardNumber;
 
-  const tagInput = document.getElementById('input-tag');
-  restrictToHalfWidth(tagInput);
-  tagInput.addEventListener('input', () => {
-    document.getElementById('card-tag').textContent = tagInput.value;
-  });
+  bindText(document.getElementById('input-tag'), state, 'tag', (v) => {
+    document.getElementById('card-tag').textContent = v;
+  }, { halfWidth: true });
 
-  document.getElementById('chk-logo').addEventListener('change', (e) => {
-    document.getElementById('revati-logo-img').style.display = e.target.checked ? '' : 'none';
+  const logoChk = document.getElementById('chk-logo');
+  const logoImg = document.getElementById('revati-logo-img');
+  logoChk.checked = state.showLogo;
+  logoImg.style.display = state.showLogo ? '' : 'none';
+  logoChk.addEventListener('change', () => {
+    state.showLogo = logoChk.checked;
+    logoImg.style.display = state.showLogo ? '' : 'none';
+    save();
   });
 
   /* =========================================================
      ヒーロー一覧の読み込み（./text/heroes.txt）
+     書式: 1行1ヒーロー「表示名」または「表示名 | 画像ファイル名」
+           <TANK> のような行はロールの見出し
   ========================================================= */
-  let heroList = [];
-let heroDisplayList = [];
+  const bgWarningEl = document.getElementById('bg-hero-warning');
 
-function buildBgHeroAccordion() {
-  const options = [{ value: '', label: 'なし' }, ...heroList.map(h => ({ value: h, label: h }))];
-  const acc = createAccordion({
-    options,
-    defaultValues: [''],
-    placeholder: '背景キャラを選択',
-    name: 'bg-hero',
-    onChange: (v) => {
-      cardContainer.style.backgroundImage = v ? `url(./img/${v}.png)` : '';
+  function heroImageSrc(file) {
+    return './img/' + encodeURIComponent(file) + '.png';
+  }
+
+  const imageCheckCache = new Map();
+  function imageExists(src) {
+    if (!imageCheckCache.has(src)) {
+      imageCheckCache.set(src, new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = src;
+      }));
     }
-  });
-  const mount = document.getElementById('acc-bg-hero');
-  mount.replaceWith(acc);
-  acc.id = 'acc-bg-hero';
-}
+    return imageCheckCache.get(src);
+  }
 
-function buildHeroPoolAccordion() {
-  // heroList ではなく heroDisplayList を参照
-  const options = heroDisplayList.map(h => ({ value: h, label: h }));
-  const acc = createAccordion({
-    options,
-    multi: true,
-    max: 3,
-    defaultValues: [],
-    placeholder: 'ヒーローを選択',
-    onChange: (values) => {
+  function applyBackground() {
+    const file = state.bgHero;
+    bgWarningEl.hidden = true;
+    if (!file) {
+      cardContainer.style.backgroundImage = 'none';
+      return;
+    }
+    const src = heroImageSrc(file);
+    imageExists(src).then(ok => {
+      if (state.bgHero !== file) return; // 途中で別のキャラが選ばれた
+      if (ok) {
+        cardContainer.style.backgroundImage = `url("${src}")`;
+      } else {
+        cardContainer.style.backgroundImage = 'none';
+        bgWarningEl.textContent = `画像が見つかりません（img/${file}.png）`;
+        bgWarningEl.hidden = false;
+      }
+    });
+  }
+
+  function parseHeroes(txt) {
+    const groups = [];
+    let current = null;
+    txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(line => {
+      const header = line.match(/^<(.+)>$/);
+      if (header) {
+        current = { role: header[1], heroes: [] };
+        groups.push(current);
+        return;
+      }
+      if (!current) {
+        current = { role: '', heroes: [] };
+        groups.push(current);
+      }
+      const [display, file] = line.split('|').map(s => s.trim());
+      current.heroes.push({ display, file: file || display.replace(/\s+/g, '-') });
+    });
+    return groups;
+  }
+
+  function buildBgHeroAccordion(groups) {
+    const options = [{ value: '', label: 'なし' }];
+    groups.forEach(g => {
+      if (g.role) options.push({ header: g.role });
+      g.heroes.forEach(h => options.push({ value: h.file, label: h.display }));
+    });
+    const acc = createAccordion({
+      options,
+      value: state.bgHero,
+      placeholder: '背景キャラを選択',
+      labelledBy: 'lbl-bg-hero',
+      onChange: (v) => {
+        state.bgHero = v;
+        applyBackground();
+        save();
+      }
+    });
+    mountAccordion('acc-bg-hero', acc);
+
+    // 画像がまだ用意されていないキャラは選べないようにする
+    groups.forEach(g => g.heroes.forEach(h => {
+      imageExists(heroImageSrc(h.file)).then(ok => {
+        if (ok) return;
+        acc.updateOptionLabel(h.file, `${h.display}（画像未登録）`);
+        acc.setOptionDisabled(h.file, true);
+      });
+    }));
+  }
+
+  function buildHeroPoolAccordion(groups) {
+    const options = [];
+    groups.forEach(g => {
+      if (g.role) options.push({ header: g.role });
+      g.heroes.forEach(h => options.push({ value: h.display, label: h.display }));
+    });
+    const render = (values) => {
       document.getElementById('hero-pool-cont').textContent = values.join(' / ');
-    }
-  });
-  const mount = document.getElementById('acc-hero-pool');
-  mount.replaceWith(acc);
-  acc.id = 'acc-hero-pool';
-}
+    };
+    mountAccordion('acc-hero-pool', createAccordion({
+      options,
+      multi: true,
+      max: 3,
+      value: state.heroPool,
+      placeholder: 'ヒーローを選択',
+      labelledBy: 'lbl-hero-pool',
+      onChange: (values) => {
+        state.heroPool = values;
+        render(values);
+        save();
+      }
+    }));
+    render(state.heroPool);
+  }
 
-// テキストファイルを読み込んで配列化する共通関数
-function loadTextList(path) {
-  return fetch(path)
+  applyBackground();
+
+  fetch('./text/heroes.txt')
     .then(r => {
-      if (!r.ok) throw new Error(`${path} not found (status ${r.status})`);
+      if (!r.ok) throw new Error(`status ${r.status}`);
       return r.text();
     })
-    .then(txt => txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean))
+    .then(txt => {
+      const groups = parseHeroes(txt);
+      buildBgHeroAccordion(groups);
+      buildHeroPoolAccordion(groups);
+    })
     .catch(err => {
-      console.warn(`${path} の読み込みに失敗しました:`, err);
-      return [];
+      console.warn('./text/heroes.txt の読み込みに失敗しました:', err);
+      ['acc-bg-hero', 'acc-hero-pool'].forEach(id => {
+        document.getElementById(id).textContent = 'ヒーロー一覧を読み込めませんでした';
+      });
     });
-}
-
-// 2つのファイルを並行して取得し、両方終わったら描画する
-Promise.all([
-  loadTextList('./text/heroes.txt'),
-  loadTextList('./text/heroes_for_display.txt')
-]).then(([heroes, heroesForDisplay]) => {
-  heroList = heroes;
-  heroDisplayList = heroesForDisplay;
-  
-  buildBgHeroAccordion();
-  buildHeroPoolAccordion();
-});
 
   /* =========================================================
      ② プロフィール
   ========================================================= */
-  const nameInput = document.getElementById('input-name');
-  nameInput.addEventListener('input', () => {
-    document.getElementById('player-name-el').textContent = nameInput.value;
+  bindText(document.getElementById('input-name'), state, 'name', (v) => {
+    document.getElementById('player-name-el').textContent = v;
   });
 
-  const xidInput = document.getElementById('input-xid');
-  restrictToHalfWidth(xidInput);
-  xidInput.addEventListener('input', () => {
-    const v = xidInput.value;
-    document.getElementById('x-id-value').textContent = v ? '@' + v : '';
-  });
+  bindText(document.getElementById('input-xid'), state, 'xid', (v) => {
+    document.getElementById('x-id-value').textContent = formatXid(v);
+  }, { halfWidth: true, stripAt: true });
 
-  const battletagInput = document.getElementById('input-battletag');
-  restrictToHalfWidth(battletagInput);
-  battletagInput.addEventListener('input', () => {
-    const v = battletagInput.value;
+  bindText(document.getElementById('input-battletag'), state, 'battletag', (v) => {
     const hashIdx = v.indexOf('#');
-    let namePart = v, tagPart = '';
-    if (hashIdx !== -1) {
-      namePart = v.slice(0, hashIdx);
-      tagPart = v.slice(hashIdx);
-    }
+    const namePart = hashIdx === -1 ? v : v.slice(0, hashIdx);
+    const tagPart = hashIdx === -1 ? '' : v.slice(hashIdx);
     document.getElementById('battletag-name').textContent = namePart;
     document.getElementById('battletag-cont-2').textContent = tagPart;
-  });
+  }, { halfWidth: true });
 
-  const roleAcc = createAccordion({
-    options: [
-      { value: 'TANK', label: 'TANK' },
-      { value: 'Main DPS', label: 'Main DPS' },
-      { value: 'Flex DPS', label: 'Flex DPS' },
-      { value: 'Main SUP', label: 'Main SUP' },
-      { value: 'Flex SUP', label: 'Flex SUP' }
-    ],
+  const renderRoles = (values) => {
+    document.getElementById('role-cont').textContent = values.join(' / ');
+  };
+  mountAccordion('acc-role', createAccordion({
+    options: ['TANK', 'Main DPS', 'Flex DPS', 'Main SUP', 'Flex SUP'].map(v => ({ value: v, label: v })),
     multi: true,
     max: 2,
+    value: state.roles,
     placeholder: 'ロールを選択',
+    labelledBy: 'lbl-role',
     onChange: (values) => {
-      document.getElementById('role-cont').textContent = values.join(' / ');
+      state.roles = values;
+      renderRoles(values);
+      save();
     }
-  });
-  const roleMount = document.getElementById('acc-role');
-  roleMount.replaceWith(roleAcc);
-  roleAcc.id = 'acc-role';
+  }));
+  renderRoles(state.roles);
 
   /* =========================================================
      ③ 過去の大会結果
@@ -323,109 +599,87 @@ Promise.all([
   const yearOptions = [];
   for (let y = 2016; y <= 2099; y++) yearOptions.push({ value: String(y), label: String(y) });
   const monthOptions = [];
-  for (let m = 0; m <= 12; m++) monthOptions.push({ value: pad2(m), label: pad2(m) });
-  const rankOptions = [
-    { value: '1st', label: '1st' },
-    { value: '2nd', label: '2nd' },
-    { value: '3rd', label: '3rd' }
-  ];
-  for (let r = 4; r <= 99; r++) rankOptions.push({ value: r + 'th', label: r + 'th' });
+  for (let m = 1; m <= 12; m++) monthOptions.push({ value: pad2(m), label: pad2(m) });
+  const rankOptions = [];
+  for (let r = 1; r <= 99; r++) rankOptions.push({ value: String(r), label: rankLabel(r) });
 
-  function addResultRow(defaults = {}) {
-    const d = Object.assign({ year: '2025', month: '01', title: 'Overwatch Champion Series', rank: '1st' }, defaults);
-    const rowId = nextId('res');
-
+  function addResultRow(d) {
     // --- プレビュー側の行 ---
     const tr = document.createElement('tr');
-    tr.dataset.rowId = rowId;
     tr.innerHTML = `
-      <td class="date" data-field="date"></td>
+      <td class="date"></td>
       <td class="divider">|</td>
-      <td class="title" data-field="title"></td>
-      <td class="rank" data-field="rank"></td>
+      <td class="title"></td>
+      <td class="rank"></td>
     `;
     resultsTbody.appendChild(tr);
-    const dateTd = tr.querySelector('[data-field="date"]');
-    const titleTd = tr.querySelector('[data-field="title"]');
-    const rankTd = tr.querySelector('[data-field="rank"]');
+    const dateTd = tr.querySelector('.date');
+    const titleTd = tr.querySelector('.title');
+    const rankTd = tr.querySelector('.rank');
 
     // --- フォーム側の行 ---
     const item = document.createElement('div');
     item.className = 'repeat-item';
-    item.dataset.rowId = rowId;
 
-    const dateLabel = document.createElement('div');
-    dateLabel.className = 'field-label';
-    dateLabel.textContent = '年月';
+    function renderDate() {
+      dateTd.textContent = `${d.year}.${d.month}`;
+    }
+    function renderRank() {
+      rankTd.textContent = rankLabel(d.rank);
+      rankTd.className = 'rank ' + rankClassOf(d.rank);
+    }
+
+    const dateLabel = makeLabel('年月');
     const dateRow = document.createElement('div');
     dateRow.className = 'inline-accordions';
+    dateRow.appendChild(createAccordion({
+      options: yearOptions, value: d.year, placeholder: '年', labelledBy: dateLabel.id,
+      onChange: (v) => { d.year = v; renderDate(); save(); }
+    }));
+    dateRow.appendChild(createAccordion({
+      options: monthOptions, value: d.month, placeholder: '月', labelledBy: dateLabel.id,
+      onChange: (v) => { d.month = v; renderDate(); save(); }
+    }));
 
-    function updateDate() {
-      dateTd.textContent = `${yearAcc.getValue()}.${monthAcc.getValue()}`;
-    }
-    const yearAcc = createAccordion({ options: yearOptions, defaultValues: [d.year], placeholder: '年', name: rowId + '-year', onChange: updateDate });
-    const monthAcc = createAccordion({ options: monthOptions, defaultValues: [d.month], placeholder: '月', name: rowId + '-month', onChange: updateDate });
-    dateRow.appendChild(yearAcc);
-    dateRow.appendChild(monthAcc);
+    const titleLabel = makeLabel('大会名');
+    const titleInput = makeTextInput(titleLabel, { placeholder: '大会名を入力' });
+    bindText(titleInput, d, 'title', (v) => { titleTd.textContent = v; });
 
-    const titleLabel = document.createElement('div');
-    titleLabel.className = 'field-label';
-    titleLabel.textContent = '大会名';
-    const titleInput = document.createElement('input');
-    titleInput.type = 'text';
-    titleInput.className = 'form-input';
-    titleInput.value = d.title;
-    titleInput.addEventListener('input', () => { titleTd.textContent = titleInput.value; });
+    const rankLabelEl = makeLabel('順位');
+    const rankAcc = createAccordion({
+      options: rankOptions, value: d.rank, placeholder: '順位', labelledBy: rankLabelEl.id,
+      onChange: (v) => { d.rank = v; renderRank(); save(); }
+    });
 
-    const rankLabel = document.createElement('div');
-    rankLabel.className = 'field-label';
-    rankLabel.textContent = '順位';
-    function applyRank(v) {
-      rankTd.textContent = v;
-      rankTd.className = 'rank ' + rankClassOf(v);
-    }
-    const rankAcc = createAccordion({ options: rankOptions, defaultValues: [d.rank], placeholder: '順位', name: rowId + '-rank', onChange: applyRank });
-
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'form-btn remove-btn';
-    removeBtn.textContent = '削除';
-    removeBtn.addEventListener('click', () => {
+    const removeBtn = makeRemoveButton(() => {
+      state.results.splice(state.results.indexOf(d), 1);
       tr.remove();
       item.remove();
+      save();
       updatePreviewScale();
     });
 
-    item.appendChild(dateLabel);
-    item.appendChild(dateRow);
-    item.appendChild(titleLabel);
-    item.appendChild(titleInput);
-    item.appendChild(rankLabel);
-    item.appendChild(rankAcc);
-    item.appendChild(removeBtn);
+    item.append(dateLabel, dateRow, titleLabel, titleInput, rankLabelEl, rankAcc, removeBtn);
     resultsFormList.appendChild(item);
 
-    // 初期表示反映
-    updateDate();
-    titleTd.textContent = d.title;
-    applyRank(d.rank);
+    renderDate();
+    renderRank();
     updatePreviewScale();
   }
 
-  document.getElementById('btn-add-result').addEventListener('click', () => addResultRow());
-  document.getElementById('chk-sec-results').addEventListener('change', (e) => {
-    document.querySelector('.sec-results').style.display = e.target.checked ? '' : 'none';
+  document.getElementById('btn-add-result').addEventListener('click', () => {
+    const now = new Date();
+    const d = { year: String(now.getFullYear()), month: pad2(now.getMonth() + 1), title: '', rank: '1' };
+    state.results.push(d);
+    addResultRow(d);
+    save();
   });
 
   /* =========================================================
      ④ 自己紹介
   ========================================================= */
-  const introInput = document.getElementById('input-intro');
-  introInput.addEventListener('input', () => {
-    document.getElementById('self-intro-el').textContent = introInput.value;
-  });
-  document.getElementById('chk-sec-intro').addEventListener('change', (e) => {
-    document.querySelector('.sec-self-introduction').style.display = e.target.checked ? '' : 'none';
+  bindText(document.getElementById('input-intro'), state, 'intro', (v) => {
+    document.getElementById('self-intro-el').textContent = v;
   });
 
   /* =========================================================
@@ -434,13 +688,9 @@ Promise.all([
   const interviewListEl = document.getElementById('interview-list-el');
   const interviewFormList = document.getElementById('interview-form-list');
 
-  function addInterviewItem(defaults = {}) {
-    const d = Object.assign({ q: '好きなキャラクターは？', a: 'トールビョーンです。' }, defaults);
-    const rowId = nextId('qa');
-
+  function addInterviewItem(d) {
     const previewItem = document.createElement('div');
     previewItem.className = 'mini-interview-item';
-    previewItem.dataset.rowId = rowId;
     previewItem.innerHTML = `
       <div class="q-text"><span class="Q">Q. </span><span data-field="q"></span></div>
       <div class="a-text"><span class="A">A. </span><span data-field="a"></span></div>
@@ -451,51 +701,33 @@ Promise.all([
 
     const item = document.createElement('div');
     item.className = 'repeat-item';
-    item.dataset.rowId = rowId;
 
-    const qLabel = document.createElement('div');
-    qLabel.className = 'field-label';
-    qLabel.textContent = '質問';
-    const qInput = document.createElement('input');
-    qInput.type = 'text';
-    qInput.className = 'form-input';
-    qInput.value = d.q;
-    qInput.addEventListener('input', () => { qSpan.textContent = qInput.value; });
+    const qLabel = makeLabel('質問');
+    const qInput = makeTextInput(qLabel);
+    bindText(qInput, d, 'q', (v) => { qSpan.textContent = v; });
 
-    const aLabel = document.createElement('div');
-    aLabel.className = 'field-label';
-    aLabel.textContent = '回答';
-    const aInput = document.createElement('input');
-    aInput.type = 'text';
-    aInput.className = 'form-input';
-    aInput.value = d.a;
-    aInput.addEventListener('input', () => { aSpan.textContent = aInput.value; });
+    const aLabel = makeLabel('回答');
+    const aInput = makeTextInput(aLabel);
+    bindText(aInput, d, 'a', (v) => { aSpan.textContent = v; });
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'form-btn remove-btn';
-    removeBtn.textContent = '削除';
-    removeBtn.addEventListener('click', () => {
+    const removeBtn = makeRemoveButton(() => {
+      state.interview.splice(state.interview.indexOf(d), 1);
       previewItem.remove();
       item.remove();
+      save();
       updatePreviewScale();
     });
 
-    item.appendChild(qLabel);
-    item.appendChild(qInput);
-    item.appendChild(aLabel);
-    item.appendChild(aInput);
-    item.appendChild(removeBtn);
+    item.append(qLabel, qInput, aLabel, aInput, removeBtn);
     interviewFormList.appendChild(item);
-
-    qSpan.textContent = d.q;
-    aSpan.textContent = d.a;
     updatePreviewScale();
   }
 
-  document.getElementById('btn-add-interview').addEventListener('click', () => addInterviewItem());
-  document.getElementById('chk-sec-interview').addEventListener('change', (e) => {
-    document.querySelector('.sec-mini-interview').style.display = e.target.checked ? '' : 'none';
+  document.getElementById('btn-add-interview').addEventListener('click', () => {
+    const d = { q: '', a: '' };
+    state.interview.push(d);
+    addInterviewItem(d);
+    save();
   });
 
   /* =========================================================
@@ -504,16 +736,36 @@ Promise.all([
   const wtplListEl = document.getElementById('wtpl-list-el');
   const wtplFormList = document.getElementById('wtpl-form-list');
 
-  function addWtplCard(defaults = {}) {
-    const d = Object.assign({ name: 'user', xid: '@user', comment: 'がんばって' }, defaults);
-    const rowId = nextId('wtpl');
+  // アップロード画像を正方形に切り抜いて縮小する（保存容量を抑えるため）
+  function readAvatar(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = reject;
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = reject;
+        img.onload = () => {
+          const side = Math.min(img.width, img.height);
+          const canvas = document.createElement('canvas');
+          canvas.width = canvas.height = AVATAR_SIZE;
+          canvas.getContext('2d').drawImage(
+            img, (img.width - side) / 2, (img.height - side) / 2, side, side,
+            0, 0, AVATAR_SIZE, AVATAR_SIZE
+          );
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
 
+  function addWtplCard(d) {
     const previewItem = document.createElement('div');
     previewItem.className = 'wtpl-card-wrapper';
-    previewItem.dataset.rowId = rowId;
     previewItem.innerHTML = `
       <div class="wtpl-profile-sticker">
-        <img class="sticker-avatar" data-field="avatar" src="./img/icon.png" alt="Icon">
+        <img class="sticker-avatar" data-field="avatar" alt="Icon">
       </div>
       <div class="wtpl-speech-bubble">
         <div class="wtpl-comment" data-field="comment"></div>
@@ -528,98 +780,98 @@ Promise.all([
 
     const item = document.createElement('div');
     item.className = 'repeat-item';
-    item.dataset.rowId = rowId;
 
-    const nameLabel = document.createElement('div');
-    nameLabel.className = 'field-label';
-    nameLabel.textContent = '名前';
-    const nameInputEl = document.createElement('input');
-    nameInputEl.type = 'text';
-    nameInputEl.className = 'form-input';
-    nameInputEl.value = d.name;
-    nameInputEl.addEventListener('input', () => { nameEl.textContent = nameInputEl.value; });
+    const nameLabel = makeLabel('名前');
+    const nameInputEl = makeTextInput(nameLabel);
+    bindText(nameInputEl, d, 'name', (v) => { nameEl.textContent = v; });
 
-    const xidLabel = document.createElement('div');
-    xidLabel.className = 'field-label';
-    xidLabel.textContent = 'XのID';
-    const xidInputEl = document.createElement('input');
-    xidInputEl.type = 'text';
-    xidInputEl.className = 'form-input';
-    xidInputEl.value = d.xid;
-    restrictToHalfWidth(xidInputEl);
-    xidInputEl.addEventListener('input', () => { xidEl.textContent = '(' + xidInputEl.value + ')'; });
+    const xidLabel = makeLabel('XのID（@なし）');
+    const xidInputEl = makeTextInput(xidLabel, { placeholder: 'user_1234' });
+    bindText(xidInputEl, d, 'xid', (v) => {
+      xidEl.textContent = v ? '(' + formatXid(v) + ')' : '';
+    }, { halfWidth: true, stripAt: true });
 
-    const avatarLabel = document.createElement('div');
-    avatarLabel.className = 'field-label';
-    avatarLabel.textContent = 'アバター画像';
+    // アバター：現在の画像のサムネイルと「既定に戻す」を並べて、設定状態がわかるようにする
+    const avatarLabel = makeLabel('アバター画像');
+    const avatarRow = document.createElement('div');
+    avatarRow.className = 'avatar-row';
+    const avatarThumb = document.createElement('img');
+    avatarThumb.className = 'avatar-thumb';
+    avatarThumb.alt = '';
     const avatarInput = document.createElement('input');
     avatarInput.type = 'file';
     avatarInput.accept = 'image/*';
     avatarInput.className = 'form-input';
+    avatarInput.id = nextId('in');
+    avatarLabel.htmlFor = avatarInput.id;
+    const avatarResetBtn = document.createElement('button');
+    avatarResetBtn.type = 'button';
+    avatarResetBtn.className = 'form-btn avatar-reset-btn';
+    avatarResetBtn.textContent = '既定に戻す';
+
+    function renderAvatar() {
+      const src = d.avatar || DEFAULT_AVATAR;
+      avatarImg.src = src;
+      avatarThumb.src = src;
+      avatarResetBtn.hidden = !d.avatar;
+    }
     avatarInput.addEventListener('change', () => {
       const file = avatarInput.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => { avatarImg.src = reader.result; };
-      reader.readAsDataURL(file);
+      readAvatar(file)
+        .then(dataUrl => {
+          d.avatar = dataUrl;
+          renderAvatar();
+          save();
+        })
+        .catch(() => alert('画像を読み込めませんでした'))
+        .finally(() => { avatarInput.value = ''; });
     });
+    avatarResetBtn.addEventListener('click', () => {
+      d.avatar = '';
+      renderAvatar();
+      save();
+    });
+    avatarRow.append(avatarThumb, avatarInput, avatarResetBtn);
 
-    const commentLabel = document.createElement('div');
-    commentLabel.className = 'field-label';
-    commentLabel.textContent = '紹介文';
-    const commentInput = document.createElement('textarea');
-    commentInput.className = 'form-input';
-    commentInput.rows = 3;
-    commentInput.value = d.comment;
-    commentInput.addEventListener('input', () => { commentEl.textContent = commentInput.value; });
+    const commentLabel = makeLabel('紹介文');
+    const commentInput = makeTextInput(commentLabel, { textarea: true, rows: 3 });
+    bindText(commentInput, d, 'comment', (v) => { commentEl.textContent = v; });
 
-    const removeBtn = document.createElement('button');
-    removeBtn.type = 'button';
-    removeBtn.className = 'form-btn remove-btn';
-    removeBtn.textContent = '削除';
-    removeBtn.addEventListener('click', () => {
+    const removeBtn = makeRemoveButton(() => {
+      state.wtpl.splice(state.wtpl.indexOf(d), 1);
       previewItem.remove();
       item.remove();
+      save();
       updatePreviewScale();
     });
 
-    item.appendChild(nameLabel);
-    item.appendChild(nameInputEl);
-    item.appendChild(xidLabel);
-    item.appendChild(xidInputEl);
-    item.appendChild(avatarLabel);
-    item.appendChild(avatarInput);
-    item.appendChild(commentLabel);
-    item.appendChild(commentInput);
-    item.appendChild(removeBtn);
+    item.append(nameLabel, nameInputEl, xidLabel, xidInputEl, avatarLabel, avatarRow, commentLabel, commentInput, removeBtn);
     wtplFormList.appendChild(item);
 
-    nameEl.textContent = d.name;
-    xidEl.textContent = '(' + d.xid + ')';
-    commentEl.textContent = d.comment;
+    renderAvatar();
     updatePreviewScale();
   }
 
-  document.getElementById('btn-add-wtpl').addEventListener('click', () => addWtplCard());
-  document.getElementById('chk-sec-wtpl').addEventListener('change', (e) => {
-    document.querySelector('.sec-wtpl').style.display = e.target.checked ? '' : 'none';
+  document.getElementById('btn-add-wtpl').addEventListener('click', () => {
+    const d = { name: '', xid: '', comment: '', avatar: '' };
+    state.wtpl.push(d);
+    addWtplCard(d);
+    save();
   });
 
   /* =========================================================
      ⑦ 画像出力
   ========================================================= */
-  const scaleOptions = [
-    { value: '1', label: '等倍 (×1)' },
-    { value: '1.5', label: '×1.5' },
-    { value: '2', label: '×2' },
-    { value: '2.5', label: '×2.5' },
-    { value: '3', label: '×3' }
-  ];
+  const scaleOptions = ['1', '1.5', '2', '2.5', '3'].map(v => ({
+    value: v,
+    label: v === '1' ? '等倍 (×1)' : `×${v}`
+  }));
   const scaleAcc = createAccordion({
     options: scaleOptions,
-    defaultValues: ['1'],
+    value: state.scale,
     placeholder: 'サイズを選択',
-    name: 'scale',
+    labelledBy: 'lbl-scale',
     onBeforeOpen: () => {
       const naturalH = cardContainer.offsetHeight;
       scaleOptions.forEach(o => {
@@ -630,13 +882,15 @@ Promise.all([
         scaleAcc.updateOptionLabel(o.value, `${base}（${w}×${h}px）`);
       });
     },
-    onChange: () => {}
+    onChange: (v) => {
+      state.scale = v;
+      save();
+    }
   });
-  document.getElementById('acc-scale').replaceWith(scaleAcc);
-  scaleAcc.id = 'acc-scale';
+  mountAccordion('acc-scale', scaleAcc);
 
   document.getElementById('btn-export').addEventListener('click', async () => {
-    const scale = parseFloat(scaleAcc.getValue() || '1');
+    const scale = parseFloat(state.scale || '1');
     const prevTransform = previewInner.style.transform;
     previewInner.style.transform = 'none';
     await new Promise(requestAnimationFrame);
@@ -658,14 +912,23 @@ Promise.all([
     }
   });
 
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    if (!window.confirm('入力内容をすべて消して初期状態に戻しますか？')) return;
+    clearTimeout(saveTimer);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (err) {
+      console.warn(err);
+    }
+    location.reload();
+  });
+
   /* =========================================================
-     初期データ
+     繰り返し項目の初期描画
   ========================================================= */
-  addResultRow({ year: '2025', month: '01', title: 'Overwatch Champion Series', rank: '1st' });
-  addResultRow({ year: '2025', month: '01', title: 'Overwatch Champion Series', rank: '1st' });
-  addInterviewItem();
-  addInterviewItem();
-  addWtplCard();
+  state.results.forEach(addResultRow);
+  state.interview.forEach(addInterviewItem);
+  state.wtpl.forEach(addWtplCard);
 
   updatePreviewScale();
 })();
