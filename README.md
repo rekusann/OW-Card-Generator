@@ -9,7 +9,7 @@
 
 ## 更新するとき
 
-index.html の `style.css?v=4` `script.js?v=4` の数字を上げると、ブラウザに古いファイルが残らない。
+index.html の `style.css?v=5` `script.js?v=5` の数字を上げると、ブラウザに古いファイルが残らない。
 
 ## ヒーロー一覧（text/heroes.txt）
 

@@ -111,18 +111,6 @@
     color: var(--sub-text);
 }
 
-/* 2枚に分けるときのページ番号 */
-.card-page {
-    font-size: 24px;
-    padding-left: 24px;
-    color: var(--sub-text);
-}
-
-/* 2枚目の名前（1枚目の .player-name と同じ見た目） */
-.sec-page2-name {
-    z-index: 2;
-}
-
 /* result-table */
 .sec-results {
     z-index: 2;
